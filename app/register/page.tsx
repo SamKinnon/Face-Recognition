@@ -10,357 +10,246 @@ import { Camera, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import * as faceapi from "face-api.js"
 
 export default function RegisterPage() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [stream, setStream] = useState<MediaStream | null>(null)
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const [stream, setStream] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [message, setMessage] = useState("")
-  const [messageType, setMessageType] = useState<"success" | "error" | "info">("info")
-  const [currentStep, setCurrentStep] = useState<"info" | "camera" | "liveness" | "capture">("info")
-  const [livenessStep, setLivenessStep] = useState<"blink" | "smile" | "turn" | "complete">("blink")
+  const [messageType, setMessageType] = useState("info")
+  const [currentStep, setCurrentStep] = useState("info")
+  const [livenessStep, setLivenessStep] = useState("blink")
   const [userName, setUserName] = useState("")
-  const [userEmail, setUserEmail] = useState("")
+  const [userAddress, setUserAddress] = useState("")
+  const [userId, setUserId] = useState("")
   const [faceApiLoaded, setFaceApiLoaded] = useState(false)
-  const [isClient, setIsClient] = useState(false)
+  const [confidence, setConfidence] = useState(0)
 
   useEffect(() => {
-    setIsClient(true)
-    loadFaceApi()
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
+      faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
+      faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
+      faceapi.nets.faceExpressionNet.loadFromUri("/models")
+    ])
+      .then(() => setFaceApiLoaded(true))
+      .catch((error) => {
+        console.error("Model loading error", error)
+        setMessage("Failed to load face recognition models.")
+        setMessageType("error")
+      })
+
     return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop())
-      }
+      if (stream) stream.getTracks().forEach((track) => track.stop())
     }
   }, [])
 
   useEffect(() => {
-    if (!isClient || !stream) return
-
-    const video = videoRef.current
-    if (!video) return
-
-    const logVideoState = () => {
-      console.log("Video state:", {
-        dimensions: `${video.videoWidth}x${video.videoHeight}`,
-        readyState: video.readyState
-      })
+    let interval
+    if (currentStep === "liveness" && videoRef.current) {
+      interval = setInterval(() => handleLivenessStep(), 500)
     }
-
-    video.addEventListener("play", logVideoState)
-    video.addEventListener("loadedmetadata", logVideoState)
-    
-    return () => {
-      video.removeEventListener("play", logVideoState)
-      video.removeEventListener("loadedmetadata", logVideoState)
-    }
-  }, [stream, isClient])
-
-  const loadFaceApi = async () => {
-    try {
-      setIsLoading(true)
-      setMessage("Loading face detection models...")
-
-      // Verify model files exist
-      const modelFiles = [
-        '/models/tiny_face_detector_model-weights_manifest.json',
-        '/models/face_landmark_68_model-weights_manifest.json'
-      ]
-      
-      for (const file of modelFiles) {
-        const exists = await fetch(file).then(r => r.ok).catch(() => false)
-        if (!exists) throw new Error(`Missing model file: ${file}`)
-      }
-
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
-        faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
-        faceapi.nets.faceRecognitionNet.loadFromUri("/models")
-      ])
-
-      setFaceApiLoaded(true)
-      setMessage("Face detection ready")
-      console.log("All models loaded successfully")
-    } catch (error) {
-      console.error("Model loading error:", error)
-      setMessage(`Failed to load face detection: ${error.message}`)
-      setMessageType("error")
-      setFaceApiLoaded(false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+    return () => clearInterval(interval)
+  }, [currentStep, livenessStep])
 
   const startCamera = async () => {
     try {
       setIsLoading(true)
-      setMessage("Initializing camera...")
-
-      if (!isClient || !videoRef.current) {
-        throw new Error("Video system not ready")
-      }
-
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: "user"
-        }
-      })
-
-      if (!videoRef.current) {
-        mediaStream.getTracks().forEach(track => track.stop())
-        throw new Error("Video element unavailable")
-      }
-
-      const video = videoRef.current
-      video.srcObject = mediaStream
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true })
       setStream(mediaStream)
 
-      await new Promise((resolve, reject) => {
-        const onReady = () => {
-          video.removeEventListener('loadedmetadata', onReady)
-          if (video.videoWidth > 0 && video.videoHeight > 0) {
-            console.log("Video ready:", video.videoWidth, "x", video.videoHeight)
-            resolve(true)
-          } else {
-            reject("Video has no dimensions")
-          }
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream
+        videoRef.current.onloadedmetadata = async () => {
+          await videoRef.current.play()
+          setCurrentStep("liveness")
+          setMessage("Camera ready. Begin liveness check.")
+          setMessageType("info")
         }
-
-        video.addEventListener('loadedmetadata', onReady, { once: true })
-        video.onerror = () => reject("Video playback failed")
-      })
-
-      setCurrentStep("liveness")
-      setMessage("Camera ready - follow instructions")
-    } catch (error) {
-      console.error("Camera error:", error)
-      setMessage(`Camera error: ${error.message}`)
-      setMessageType("error")
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop())
       }
+    } catch (err) {
+      console.error("Camera error:", err)
+      setMessage("Failed to access camera.")
+      setMessageType("error")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleLivenessStep = () => {
-    switch (livenessStep) {
-      case "blink":
+  const handleLivenessStep = async () => {
+    if (!videoRef.current || !faceApiLoaded) return
+
+    const detections = await faceapi
+      .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceExpressions()
+
+    if (!detections) {
+      setMessage("No face detected. Make sure your face is visible.")
+      setMessageType("error")
+      return
+    }
+
+    if (canvasRef.current) {
+      const dims = faceapi.matchDimensions(canvasRef.current, videoRef.current, true)
+      const resized = faceapi.resizeResults(detections, dims)
+      faceapi.draw.drawDetections(canvasRef.current, resized)
+    }
+
+    const expressions = detections.expressions || {}
+    const happy = expressions.happy || 0
+    const neutral = expressions.neutral || 0
+    const sad = expressions.sad || 0
+
+    if (livenessStep === "blink") {
+      if (neutral > 0.9) {
+        setConfidence(Math.round(neutral * 100))
         setLivenessStep("smile")
-        setMessage("Great! Now please smile for the camera.")
-        break
-      case "smile":
+        setMessage("Great! Now please smile.")
+      } else {
+        setConfidence(Math.round(neutral * 100))
+        setMessage("Please blink slowly")
+      }
+    } else if (livenessStep === "smile") {
+      if (happy > 0.9) {
+        setConfidence(Math.round(happy * 100))
         setLivenessStep("turn")
-        setMessage("Perfect! Now slowly turn your head left and right.")
-        break
-      case "turn":
+        setMessage("Awesome! Now turn your head slowly.")
+      } else {
+        setConfidence(Math.round(happy * 100))
+        setMessage("Please smile clearly")
+      }
+    } else if (livenessStep === "turn") {
+      if (sad > 0.5) {
+        setConfidence(Math.round(sad * 100))
         setLivenessStep("complete")
         setCurrentStep("capture")
-        setMessage("Liveness verification complete! Ready to capture your face.")
+        setMessage("Liveness complete. Ready to capture.")
         setMessageType("success")
-        break
+      } else {
+        setConfidence(Math.round(sad * 100))
+        setMessage("Please turn your head slowly")
+      }
     }
   }
 
   const captureFace = async () => {
-    try {
-      setIsLoading(true)
-      setMessage("Detecting face...")
+    if (!videoRef.current || !canvasRef.current || !faceApiLoaded) return
 
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      
-      if (!video || !canvas) throw new Error("Missing video/canvas elements")
-      if (video.readyState < 2) throw new Error("Video not ready")
-      if (video.videoWidth === 0) throw new Error("Video has zero width")
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
 
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-      const ctx = canvas.getContext("2d")
-      if (!ctx) throw new Error("Could not get canvas context")
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      setMessage("Video not ready.")
+      setMessageType("error")
+      return
+    }
 
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      
-      const detection = await faceapi.detectSingleFace(
-        canvas,
-        new faceapi.TinyFaceDetectorOptions({
-          inputSize: 512,
-          scoreThreshold: 0.52
-        })
-      )
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
       .withFaceDescriptor()
 
-      if (!detection) {
-        throw new Error("No face detected - center your face and try again")
-      }
-
-      console.log("Face detected:", detection)
-      setMessage("Face detected! Processing...")
-      
-      // Registration logic here...
-      
-    } catch (error) {
-      console.error("Detection failed:", error)
-      setMessage(error.message)
+    if (!detection) {
+      setMessage("Face not detected.")
       setMessageType("error")
-    } finally {
-      setIsLoading(false)
+      return
+    }
+
+    const faceEncoding = Array.from(detection.descriptor)
+
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: userName,
+        address: userAddress,
+        nationalId: userId,
+        faceEncoding
+      })
+    })
+
+    if (response.ok) {
+      setMessage("Registration successful.")
+      setMessageType("success")
+      stream?.getTracks().forEach((track) => track.stop())
+    } else {
+      const data = await response.json()
+      setMessage(data.error || "Registration failed")
+      setMessageType("error")
     }
   }
 
-  const getLivenessPrompt = () => {
-    switch (livenessStep) {
-      case "blink": return "Please blink your eyes slowly"
-      case "smile": return "Please smile for the camera"
-      case "turn": return "Please turn your head left and right"
-      default: return "Liveness check complete"
-    }
-  }
+  const isValidId = (id) => /^1\d{15}$/.test(id)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="container mx-auto max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Register New Face</h1>
-          <p className="text-gray-600">Complete the registration process to add your face to the system</p>
-        </div>
+    <div className="min-h-screen p-6 bg-blue-50">
+      <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Register</CardTitle>
+            <CardDescription>Fill in your details below</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input placeholder="Full Name" value={userName} onChange={(e) => setUserName(e.target.value)} />
+            <Input placeholder="Address" value={userAddress} onChange={(e) => setUserAddress(e.target.value)} />
+            <Input
+              placeholder="National ID (16 digits starting with 1)"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              maxLength={16}
+            />
+            <Button
+              onClick={startCamera}
+              disabled={!userName || !userAddress || !isValidId(userId) || !faceApiLoaded}
+              className="w-full"
+            >
+              Start Camera
+            </Button>
+          </CardContent>
+        </Card>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>User Information</CardTitle>
-              <CardDescription>Enter your details for registration</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
-                <Input
-                  id="name"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  placeholder="Enter your full name"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder="Enter your email"
-                />
-              </div>
-
-              {currentStep === "info" && (
-                <Button
-                  onClick={startCamera}
-                  disabled={!userName || !userEmail || isLoading || !faceApiLoaded}
-                  className="w-full"
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Camera className="h-4 w-4 mr-2" />
-                  )}
-                  Start Face Registration
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Face Capture</CardTitle>
-              <CardDescription>
-                {currentStep === "info" && "Click start to begin face registration"}
-                {currentStep === "camera" && "Initializing camera..."}
-                {currentStep === "liveness" && `Liveness Check: ${getLivenessPrompt()}`}
-                {currentStep === "capture" && "Ready to capture your face"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="relative">
-                {currentStep !== "info" && isClient && (
-                  <div className="relative bg-gray-900 rounded-lg overflow-hidden border-4 border-red-500">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-64 object-cover bg-black"
-                      style={{ transform: 'scaleX(-1)' }}
-                      onLoadedMetadata={() => console.log("Video metadata loaded")}
-                      onError={(e) => console.error("Video error:", e.currentTarget.error)}
-                    />
-                    <canvas ref={canvasRef} className="hidden" />
-
-                    {currentStep === "liveness" && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
-                        <div className="text-center text-white">
-                          <div className="text-2xl mb-4">{getLivenessPrompt()}</div>
-                          <Button onClick={handleLivenessStep} variant="secondary">
-                            {livenessStep === "turn" ? "Complete" : "Next"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="absolute bottom-2 left-2 text-white text-xs bg-black bg-opacity-70 p-1 rounded">
-                      {videoRef.current?.readyState === 4 ? 
-                        `Live: ${videoRef.current.videoWidth}x${videoRef.current.videoHeight}` : 
-                        "Waiting for video..."}
-                    </div>
-                  </div>
-                )}
-
-                {currentStep === "capture" && (
-                  <div className="mt-4">
-                    <Button onClick={captureFace} disabled={isLoading} className="w-full">
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                      )}
-                      Capture Face
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {message && (
-          <Alert className={`mt-6 ${
-            messageType === "success" ? "border-green-500" :
-            messageType === "error" ? "border-red-500" :
-            "border-blue-500"
-          }`}>
-            {messageType === "success" ? (
-              <CheckCircle className="h-4 w-4" />
-            ) : messageType === "error" ? (
-              <AlertCircle className="h-4 w-4" />
-            ) : (
-              <Camera className="h-4 w-4" />
+        <Card>
+          <CardHeader>
+            <CardTitle>Camera</CardTitle>
+            <CardDescription>
+              {currentStep === "info" && "Start to begin."}
+              {currentStep === "liveness" && `Liveness: ${livenessStep} (${confidence}%)`}
+              {currentStep === "capture" && "Ready to capture face."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="relative">
+              <video ref={videoRef} autoPlay muted className="w-full h-64 rounded-lg bg-black" />
+              <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-64" />
+            </div>
+            {currentStep === "capture" && (
+              <Button onClick={captureFace} className="mt-4 w-full">
+                Capture & Register
+              </Button>
             )}
-            <AlertDescription>{message}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
-          <h4 className="font-bold">System Status:</h4>
-          <ul className="space-y-1">
-            <li>Client: {isClient ? "✅ Ready" : "❌ Loading"}</li>
-            <li>Video Element: {videoRef.current ? "✅ Found" : "❌ Missing"}</li>
-            <li>Models: {faceApiLoaded ? "✅ Loaded" : "❌ Loading"}</li>
-            <li>Camera: {stream ? "✅ Active" : "❌ Inactive"}</li>
-          </ul>
-        </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {message && (
+        <Alert
+          className={`mt-6 max-w-2xl mx-auto ${
+            messageType === "success"
+              ? "border-green-500"
+              : messageType === "error"
+              ? "border-red-500"
+              : "border-blue-500"
+          }`}
+        >
+          <AlertDescription>{message}</AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
