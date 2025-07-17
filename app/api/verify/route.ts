@@ -1,95 +1,63 @@
-import { type NextRequest, NextResponse } from "next/server"
-import mysql from "mysql2/promise"
+import { NextResponse } from "next/server"
+import { PrismaClient } from "@/lib/generated/prisma"
 
-// Database connection configuration
-const dbConfig = {
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "face_recognition",
-  port: Number.parseInt(process.env.DB_PORT || "3306"),
-}
+const prisma = new PrismaClient()
 
-// Calculate Euclidean distance between two face encodings
-function calculateDistance(encoding1: number[], encoding2: number[]): number {
-  if (encoding1.length !== encoding2.length) {
-    throw new Error("Encodings must have the same length")
-  }
-
-  let sum = 0
-  for (let i = 0; i < encoding1.length; i++) {
-    sum += Math.pow(encoding1[i] - encoding2[i], 2)
-  }
-
-  return Math.sqrt(sum)
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
-    const { faceEncoding } = await request.json()
+    const body = await req.json()
+    const { nationalId, faceEncoding } = body
 
-    if (!faceEncoding || !Array.isArray(faceEncoding)) {
-      return NextResponse.json({ error: "Invalid face encoding" }, { status: 400 })
+    if (!nationalId || !faceEncoding) {
+      return NextResponse.json({ error: "Missing data" }, { status: 400 })
     }
 
-    // Create database connection
-    const connection = await mysql.createConnection(dbConfig)
+    // Fetch all users with a face encoding
+    const users = await prisma.user.findMany({
+      where: { faceEncoding: { not: null } },
+    })
 
-    try {
-      // Get all registered users
-      const [users] = await connection.execute("SELECT id, name, email, face_encoding FROM users")
+    const inputEncoding = new Float32Array(faceEncoding)
 
-      if (!Array.isArray(users) || users.length === 0) {
-        return NextResponse.json({
-          match: false,
-          message: "No registered users found",
-        })
+    let bestMatch = null
+    let lowestDistance = Infinity
+
+    for (const user of users) {
+      const userEncoding = new Float32Array(user.faceEncoding)
+      const distance = cosineDistance(userEncoding, inputEncoding)
+
+      if (distance < lowestDistance) {
+        lowestDistance = distance
+        bestMatch = user
       }
-
-      // Find the best match
-      let bestMatch = null
-      let bestDistance = Number.POSITIVE_INFINITY
-      const threshold = 0.6 // Similarity threshold (lower = more similar)
-
-      for (const user of users as any[]) {
-        try {
-          const storedEncoding = JSON.parse(user.face_encoding)
-          const distance = calculateDistance(faceEncoding, storedEncoding)
-
-          if (distance < bestDistance && distance < threshold) {
-            bestDistance = distance
-            bestMatch = {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              similarity: (1 - distance).toFixed(3),
-            }
-          }
-        } catch (error) {
-          console.error("Error processing user encoding:", error)
-        }
-      }
-
-      if (bestMatch) {
-        // Update last login
-        await connection.execute("UPDATE users SET last_login = NOW() WHERE id = ?", [bestMatch.id])
-
-        return NextResponse.json({
-          match: true,
-          user: bestMatch,
-          distance: bestDistance.toFixed(3),
-        })
-      } else {
-        return NextResponse.json({
-          match: false,
-          message: "No matching face found",
-        })
-      }
-    } finally {
-      await connection.end()
     }
+
+    const isMatch = bestMatch && lowestDistance < 0.5 && bestMatch.nationalId === nationalId
+
+    if (!isMatch) {
+      return NextResponse.json({
+        match: false,
+        error: "Face or ID does not match any registered user",
+      }, { status: 401 })
+    }
+
+    return NextResponse.json({
+      match: true,
+      user: { fullName: bestMatch.fullName },
+    })
   } catch (error) {
     console.error("Verification error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
+}
+
+// Simple cosine distance calculator
+function cosineDistance(a: Float32Array, b: Float32Array): number {
+  let dot = 0, normA = 0, normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] ** 2
+    normB += b[i] ** 2
+  }
+  return 1 - dot / (Math.sqrt(normA) * Math.sqrt(normB))
 }
