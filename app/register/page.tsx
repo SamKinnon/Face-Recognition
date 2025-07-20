@@ -14,6 +14,7 @@ export default function UserRegistrationForm() {
     address: "",
     nationalId: "",
     email: "",
+    role: "VOTER"
   });
 
   const [faceEncoding, setFaceEncoding] = useState<number[] | null>(null);
@@ -27,8 +28,6 @@ export default function UserRegistrationForm() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-
-  // Load face-api.js models
   useEffect(() => {
     const loadModels = async () => {
       await faceapi.nets.tinyFaceDetector.loadFromUri("/models");
@@ -39,7 +38,6 @@ export default function UserRegistrationForm() {
     loadModels();
   }, []);
 
-  // Start camera when models are loaded
   useEffect(() => {
     if (faceApiLoaded) startCamera();
   }, [faceApiLoaded]);
@@ -80,7 +78,6 @@ export default function UserRegistrationForm() {
         if (confidence > 0.9) {
           currentStep++;
 
-          // When all steps complete
           if (currentStep >= steps.length) {
             const encoding = Array.from(detection.descriptor);
             setFaceEncoding(encoding);
@@ -93,7 +90,7 @@ export default function UserRegistrationForm() {
         setInstruction("Please position your face clearly in the frame");
       }
 
-      setTimeout(runDetection, 1200);
+      setTimeout(runDetection, 900); // Faster loop
     };
 
     runDetection();
@@ -151,7 +148,6 @@ export default function UserRegistrationForm() {
   return (
     <div className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Form */}
         <div className="bg-white p-6 rounded-xl shadow space-y-4">
           <h2 className="text-xl font-bold">User Registration</h2>
 
@@ -191,6 +187,18 @@ export default function UserRegistrationForm() {
             />
           </div>
 
+          <div>
+            <Label>Role</Label>
+            <select
+              className="w-full border border-gray-300 rounded px-3 py-2 mt-1"
+              value={form.role}
+              onChange={(e) => handleChange("role", e.target.value)}
+            >
+              <option value="VOTER">VOTER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+
           <Button
             onClick={handleSubmit}
             disabled={!isFormComplete || isSubmitting}
@@ -208,7 +216,6 @@ export default function UserRegistrationForm() {
           )}
         </div>
 
-        {/* Camera Feed + Instruction */}
         <div className="relative bg-black rounded-xl overflow-hidden">
           <video ref={videoRef} autoPlay muted className="w-full h-72 object-cover" />
           <canvas ref={canvasRef} className="hidden" />

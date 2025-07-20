@@ -20,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <nav className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        {/* <nav className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <Link href="/" className="text-xl font-bold text-gray-900">
@@ -38,7 +38,7 @@ export default function RootLayout({
               </div>
             </div>
           </div>
-        </nav>
+        </nav> */}
         {children}
       </body>
     </html>

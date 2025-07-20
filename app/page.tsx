@@ -1,120 +1,160 @@
-import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Camera, Shield, Users, Zap } from "lucide-react"
+"use client";
 
-export default function HomePage() {
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Vote, Shield, Users, BarChart3, CheckCircle, AlertCircle, Camera, Zap } from "lucide-react";
+
+export default function UnifiedHomePage() {
+  const [isConnected, setIsConnected] = useState(false);
+  const [account, setAccount] = useState("");
+
+  useEffect(() => {
+    checkConnection();
+  }, []);
+
+  const checkConnection = async () => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        if (accounts.length > 0) {
+          setIsConnected(true);
+          setAccount(accounts[0]);
+        }
+      } catch (error) {
+        console.error("Error checking connection:", error);
+      }
+    }
+  };
+
+  const connectWallet = async () => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        setIsConnected(true);
+        setAccount(accounts[0]);
+      } catch (error) {
+        console.error("Error connecting wallet:", error);
+      }
+    } else {
+      alert("Please install MetaMask to use this application");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Face Recognition System</h1>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Advanced biometric authentication using facial features. Secure, fast, and reliable identity verification.
-          </p>
-        </div>
-
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          <Card>
-            <CardHeader className="text-center">
-              <Camera className="h-8 w-8 mx-auto text-blue-600 mb-2" />
-              <CardTitle className="text-lg">Real-time Detection</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 text-center">
-                Uses webcam for instant face detection with no downloads required
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="text-center">
-              <Shield className="h-8 w-8 mx-auto text-green-600 mb-2" />
-              <CardTitle className="text-lg">Liveness Detection</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 text-center">
-                Anti-spoofing protection with blink, smile, and head movement verification
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="text-center">
-              <Zap className="h-8 w-8 mx-auto text-yellow-600 mb-2" />
-              <CardTitle className="text-lg">Fast Matching</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 text-center">
-                Mathematical face encodings for quick and accurate identity verification
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="text-center">
-              <Users className="h-8 w-8 mx-auto text-purple-600 mb-2" />
-              <CardTitle className="text-lg">Secure Storage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-600 text-center">
-                Only face encodings stored, never actual photos for maximum privacy
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Link href="/register">
-            <Button size="lg" className="w-full sm:w-auto">
-              Register New Face
-            </Button>
-          </Link>
-          <Link href="/login">
-            <Button variant="outline" size="lg" className="w-full sm:w-auto bg-transparent">
-              Face Login
-            </Button>
-          </Link>
-        </div>
-
-        {/* How it Works */}
-        <div className="mt-16">
-          <h2 className="text-2xl font-bold text-center mb-8">How It Works</h2>
-          <div className="grid md:grid-cols-4 gap-6">
-            <div className="text-center">
-              <div className="bg-blue-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                <span className="text-blue-600 font-bold">1</span>
-              </div>
-              <h3 className="font-semibold mb-2">Face Detection</h3>
-              <p className="text-sm text-gray-600">Camera detects and locates your face in real-time</p>
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-2">
+              <Vote className="h-8 w-8 text-blue-600" />
+              <h1 className="text-xl font-bold text-gray-900">SecureVote & FaceRecognition System</h1>
             </div>
-            <div className="text-center">
-              <div className="bg-green-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                <span className="text-green-600 font-bold">2</span>
-              </div>
-              <h3 className="font-semibold mb-2">Liveness Check</h3>
-              <p className="text-sm text-gray-600">Verify you're real with blink, smile, and head movements</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-yellow-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                <span className="text-yellow-600 font-bold">3</span>
-              </div>
-              <h3 className="font-semibold mb-2">Face Encoding</h3>
-              <p className="text-sm text-gray-600">Convert face to mathematical representation</p>
-            </div>
-            <div className="text-center">
-              <div className="bg-purple-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
-                <span className="text-purple-600 font-bold">4</span>
-              </div>
-              <h3 className="font-semibold mb-2">Face Matching</h3>
-              <p className="text-sm text-gray-600">Compare with stored encodings for verification</p>
+            <div className="flex items-center space-x-4">
+              {isConnected ? (
+                <div className="flex items-center space-x-2">
+                  <Badge variant="outline" className="text-green-600 border-green-600">
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                  <span className="text-sm text-gray-600">
+                    {account.slice(0, 6)}...{account.slice(-4)}
+                  </span>
+                  <Link href="/login" >.</Link>
+                </div>
+              ) : (
+                <Button onClick={connectWallet} className="bg-blue-600 hover:bg-blue-700">
+                  Connect MetaMask
+                </Button>
+                
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="py-20 px-4 sm:px-6 lg:px-8 text-center">
+        <h2 className="text-4xl font-bold text-gray-900 mb-6">
+          Secure Online Voting with Blockchain & Face Recognition
+        </h2>
+        <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          Experience secure, biometric-authenticated voting with blockchain transparency.
+        </p>
+        {!isConnected && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
+            <div className="flex items-center justify-center space-x-2 text-yellow-800">
+              <AlertCircle className="h-5 w-5" />
+              <span className="font-medium">Please connect your MetaMask wallet to continue</span>
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+          <Link href="/register">
+            <Button size="lg" className="w-full bg-blue-600 hover:bg-blue-700" disabled={!isConnected}>
+              Register to Vote
+            </Button>
+          </Link>
+          <Link href="/login">
+            <Button size="lg" variant="outline" className="w-full bg-transparent" disabled={!isConnected}>
+              Cast Your Vote
+            </Button>
+          </Link>
+        </div>
+      </section>
+
+      {/* Features Section */}
+      <section className="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <Card className="text-center">
+            <CardHeader>
+              <Shield className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+              <CardTitle className="text-lg">Biometric Security</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Liveness detection and anti-spoofing ensure only real users vote.
+              </CardDescription>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <Vote className="h-12 w-12 text-green-600 mx-auto mb-4" />
+              <CardTitle className="text-lg">Blockchain Integrity</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Immutable, transparent vote records with smart contracts.
+              </CardDescription>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <Camera className="h-12 w-12 text-yellow-600 mx-auto mb-4" />
+              <CardTitle className="text-lg">Real-time Detection</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Face captured via webcam with instant verification.
+              </CardDescription>
+            </CardContent>
+          </Card>
+          <Card className="text-center">
+            <CardHeader>
+              <Zap className="h-12 w-12 text-purple-600 mx-auto mb-4" />
+              <CardTitle className="text-lg">Fast Matching</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                High-speed face encoding and matching for quick auth.
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
     </div>
-  )
+  );
 }

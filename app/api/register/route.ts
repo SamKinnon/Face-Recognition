@@ -13,6 +13,7 @@ const RegistrationSchema = z.object({
     .regex(/^1/, 'Must start with 1'),
   email: z.string().email().optional(),
   faceEncoding: z.array(z.number()).length(128),
+  role: z.enum(['VOTER', 'ADMIN']).default('VOTER')  // 👈 add role validation
 })
 
 export async function POST(request: Request) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error.format() }, { status: 400 })
     }
 
-    const { fullName, address, nationalId, email, faceEncoding } = parsed.data
+    const { fullName, address, nationalId, email, faceEncoding, role } = parsed.data
 
     // Check if already registered
     const existing = await prisma.user.findUnique({ where: { nationalId } })
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
         nationalId,
         email,
         faceEncoding, // stored as JSON
+        role,         // 👈 store role in DB
       },
     })
 

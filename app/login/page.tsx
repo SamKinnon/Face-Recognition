@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -127,8 +128,7 @@ export default function FaceLoginPage() {
 
       const data = await res.json()
       if (res.ok && data.match) {
-        setMessage(`✅ Welcome, ${data.user.fullName}`)
-        setStatus("success")
+        router.push("/vote")
       } else {
         setMessage("❌ Face or ID not recognized.")
         setStatus("error")
@@ -140,6 +140,8 @@ export default function FaceLoginPage() {
       setIsVerifying(false)
     }
   }
+
+  const router = useRouter()
 
   const handleStart = () => {
     if (!/^1\d{15}$/.test(nationalId)) {
