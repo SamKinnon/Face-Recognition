@@ -19,19 +19,33 @@ export default function AdminElectionsPage() {
   const [elections, setElections] = useState<Election[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadElections = async () => {
-      try {
-        const res = await fetch("/api/admin/elections");
-        const data = await res.json();
-        setElections(data);
-      } catch (err) {
-        console.error("Error fetching elections:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadElections = async () => {
+    try {
+      const res = await fetch("/api/admin/elections");
+      const data = await res.json();
+      setElections(data);
+    } catch (err) {
+      console.error("Error fetching elections:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const publishResults = async (electionId: number) => {
+    try {
+      const res = await fetch(`/api/admin/elections/${electionId}/publish`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to publish results");
+      alert("✅ Results published!");
+      loadElections(); // Refresh
+    } catch (err) {
+      console.error(err);
+      alert("❌ Could not publish results");
+    }
+  };
+
+  useEffect(() => {
     loadElections();
   }, []);
 
@@ -64,8 +78,30 @@ export default function AdminElectionsPage() {
                     <p><strong>Start:</strong> {new Date(election.startDate).toLocaleDateString()}</p>
                     <p><strong>End:</strong> {new Date(election.endDate).toLocaleDateString()}</p>
                     <p className={election.isPublished ? "text-green-600" : "text-yellow-600"}>
-                      {election.isPublished ? "✅ Published" : "🕒 Draft"}
+                      {election.isPublished ? "✅ Results Published" : "🕒 Draft"}
                     </p>
+
+                    <div className="flex gap-2 flex-wrap mt-3">
+                      <Link href={`/admin/elections/${election.id}/candidates/add`}>
+                        <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                          ➕ Add Candidate
+                        </Button>
+                      </Link>
+
+                      <Link href={`/results/${election.id}`}>
+                        <Button size="sm" variant="outline">📊 View Results</Button>
+                      </Link>
+
+                      {!election.isPublished && (
+                        <Button
+                          size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => publishResults(election.id)}
+                        >
+                          📢 Publish Results
+                        </Button>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))

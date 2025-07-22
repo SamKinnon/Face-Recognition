@@ -23,6 +23,7 @@ model User {
   wallet       String?
   role         Role     @default(VOTER)
   createdAt    DateTime @default(now())
+  hasVoted     Boolean  @default(false)
 
   votes        Vote[]
 }

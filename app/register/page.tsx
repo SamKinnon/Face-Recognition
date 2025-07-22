@@ -103,10 +103,11 @@ export default function UserRegistrationForm() {
   const isValidNationalId = (id: string) => /^1\d{15}$/.test(id);
 
   const isFormComplete =
-    form.fullName.trim() &&
-    form.address.trim() &&
-    isValidNationalId(form.nationalId) &&
-    faceEncoding;
+  form.fullName.trim().length > 0 &&
+  form.address.trim().length > 0 &&
+  isValidNationalId(form.nationalId) &&
+  Array.isArray(faceEncoding) &&
+  faceEncoding.length === 128;
 
   const handleSubmit = async () => {
     if (!isValidNationalId(form.nationalId)) {

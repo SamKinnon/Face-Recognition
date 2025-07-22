@@ -1,8 +1,7 @@
 import { ethers } from "ethers";
-import contractABI from "@/contracts/VotingSystem.json";
 
 // Make sure this matches your deployed contract's address
-const CONTRACT_ADDRESS = "0x265392de776245eAA3492944aBbad60D047E16cd"; // ← use your actual deployed address
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from "@/lib/config"; // ← use your actual deployed address
 
 export const getEthereum = (): any => {
   if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
@@ -19,7 +18,7 @@ export const getProvider = () => {
 export const getContract = async () => {
   const provider = await getProvider();
   const signer = await provider.getSigner();
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI.abi, signer);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI.abi, signer);
   return contract;
 };
 
