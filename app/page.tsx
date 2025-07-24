@@ -53,25 +53,6 @@ export default function UnifiedHomePage() {
               <Vote className="h-8 w-8 text-blue-600" />
               <h1 className="text-xl font-bold text-gray-900">SecureVote & FaceRecognition System</h1>
             </div>
-            <div className="flex items-center space-x-4">
-              {isConnected ? (
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="text-green-600 border-green-600">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Connected
-                  </Badge>
-                  <span className="text-sm text-gray-600">
-                    {account.slice(0, 6)}...{account.slice(-4)}
-                  </span>
-                  <Link href="/login" >.</Link>
-                </div>
-              ) : (
-                <Button onClick={connectWallet} className="bg-blue-600 hover:bg-blue-700">
-                  Connect MetaMask
-                </Button>
-                
-              )}
-            </div>
           </div>
         </div>
       </header>
@@ -84,22 +65,14 @@ export default function UnifiedHomePage() {
         <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
           Experience secure, biometric-authenticated voting with blockchain transparency.
         </p>
-        {!isConnected && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-8 max-w-2xl mx-auto">
-            <div className="flex items-center justify-center space-x-2 text-yellow-800">
-              <AlertCircle className="h-5 w-5" />
-              <span className="font-medium">Please connect your MetaMask wallet to continue</span>
-            </div>
-          </div>
-        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
           <Link href="/register">
-            <Button size="lg" className="w-full bg-blue-600 hover:bg-blue-700" disabled={!isConnected}>
+            <Button size="lg" className="w-full bg-blue-600 hover:bg-blue-700">
               Register to Vote
             </Button>
           </Link>
           <Link href="/login">
-            <Button size="lg" variant="outline" className="w-full bg-transparent" disabled={!isConnected}>
+            <Button size="lg" variant="outline" className="w-full bg-transparent">
               Cast Your Vote
             </Button>
           </Link>

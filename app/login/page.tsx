@@ -1,5 +1,6 @@
 "use client"
-
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState, useRef, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,11 +10,14 @@ import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import * as faceapi from "face-api.js"
 
 export default function FaceLoginPage() {
+  const router = useRouter()
+
   const [nationalId, setNationalId] = useState("")
   const [message, setMessage] = useState("")
   const [status, setStatus] = useState<"success" | "error" | "info">("info")
   const [isVerifying, setIsVerifying] = useState(false)
   const [stepMessage, setStepMessage] = useState("Loading models...")
+  const [userData, setUserData] = useState<{ fullName: string } | null>(null)
 
   const [faceEncoding, setFaceEncoding] = useState<number[] | null>(null)
   const [faceApiLoaded, setFaceApiLoaded] = useState(false)
@@ -22,22 +26,40 @@ export default function FaceLoginPage() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // Load models
   useEffect(() => {
     const loadModels = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri("/models")
-      await faceapi.nets.faceLandmark68Net.loadFromUri("/models")
-      await faceapi.nets.faceRecognitionNet.loadFromUri("/models")
-      await faceapi.nets.faceExpressionNet.loadFromUri("/models")
-      setFaceApiLoaded(true)
-      setStepMessage("✅ Models loaded. Enter ID to begin.")
+      try {
+        await faceapi.nets.tinyFaceDetector.loadFromUri("/models")
+        await faceapi.nets.faceLandmark68Net.loadFromUri("/models")
+        await faceapi.nets.faceRecognitionNet.loadFromUri("/models")
+        await faceapi.nets.faceExpressionNet.loadFromUri("/models")
+        setFaceApiLoaded(true)
+        setStepMessage("✅ Models loaded. Enter ID to begin.")
+      } catch (error) {
+        console.error("Error loading models:", error)
+        setMessage("Failed to load face detection models")
+        setStatus("error")
+      }
     }
     loadModels()
+
+    return () => {
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream
+        stream.getTracks().forEach((track) => track.stop())
+      }
+    }
   }, [])
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: 1280,
+          height: 720,
+          facingMode: "user",
+        },
+      })
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         videoRef.current.onloadedmetadata = () => {
@@ -46,7 +68,8 @@ export default function FaceLoginPage() {
         }
       }
     } catch (err) {
-      setMessage("Camera failed to start.")
+      console.error("Camera error:", err)
+      setMessage("Camera access denied or failed to start")
       setStatus("error")
     }
   }
@@ -62,52 +85,59 @@ export default function FaceLoginPage() {
       const video = videoRef.current
       const canvas = canvasRef.current
 
-      const dims = faceapi.matchDimensions(canvas, {
-        width: video.videoWidth,
-        height: video.videoHeight,
-      })
+      try {
+        const dims = faceapi.matchDimensions(canvas, {
+          width: video.videoWidth,
+          height: video.videoHeight,
+        })
 
-      const result = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
-        .withFaceExpressions()
-        .withFaceDescriptor()
+        const result = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceExpressions()
+          .withFaceDescriptor()
 
-      const ctx = canvas.getContext("2d")!
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+        const ctx = canvas.getContext("2d")!
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-      if (result) {
-        const resized = faceapi.resizeResults(result, dims)
-        faceapi.draw.drawDetections(canvas, resized)
-        faceapi.draw.drawFaceLandmarks(canvas, resized)
+        if (result) {
+          const resized = faceapi.resizeResults(result, dims)
+          faceapi.draw.drawDetections(canvas, resized)
+          faceapi.draw.drawFaceLandmarks(canvas, resized)
 
-        const expressions = result.expressions
-        const noseX = result.landmarks.getNose()[0].x
+          const expressions = result.expressions
+          const noseX = result.landmarks.getNose()[0].x
 
-        if (!blinked && expressions.surprised > 0.3 && expressions.neutral < 0.6) {
-          setStepMessage("✅ Blink detected")
-          blinked = true
-        } else if (blinked && !smiled && expressions.happy > 0.8) {
-          setStepMessage("✅ Smile detected")
-          smiled = true
-        } else if (smiled && !turned && (noseX < 150 || noseX > 250)) {
-          setStepMessage("✅ Turn detected")
-          turned = true
+          if (!blinked && expressions.surprised > 0.3 && expressions.neutral < 0.6) {
+            setStepMessage("✅ Blink detected")
+            blinked = true
+          } else if (blinked && !smiled && expressions.happy > 0.8) {
+            setStepMessage("✅ Smile detected")
+            smiled = true
+          } else if (smiled && !turned && (noseX < 150 || noseX > 250)) {
+            setStepMessage("✅ Turn detected")
+            turned = true
+          }
+
+          if (blinked && smiled && turned) {
+            const encoding = Array.from(result.descriptor)
+            setFaceEncoding(encoding)
+            setStepMessage("Verifying identity...")
+            setIsDetecting(false)
+            verifyFace(encoding)
+            return
+          }
+        } else {
+          setStepMessage("Face not detected. Align your face in the frame.")
         }
 
-        if (blinked && smiled && turned) {
-          const encoding = Array.from(result.descriptor)
-          setFaceEncoding(encoding)
-          setStepMessage("Verifying identity...")
-          setIsDetecting(false)
-          verifyFace(encoding)
-          return
-        }
-      } else {
-        setStepMessage("Face not detected. Align your face in the frame.")
+        if (!turned) requestAnimationFrame(detect)
+      } catch (error) {
+        console.error("Detection error:", error)
+        setIsDetecting(false)
+        setMessage("Face detection failed")
+        setStatus("error")
       }
-
-      if (!turned) setTimeout(detect, 1000)
     }
 
     detect()
@@ -126,11 +156,23 @@ export default function FaceLoginPage() {
       })
 
       const data = await res.json()
+
       if (res.ok && data.match) {
         setMessage(`✅ Welcome, ${data.user.fullName}`)
         setStatus("success")
+        setUserData(data.user)
+
+        // Stop camera
+        if (videoRef.current?.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream
+          stream.getTracks().forEach((track) => track.stop())
+          videoRef.current.srcObject = null
+        }
+
+        // ⏩ Redirect to blockchain dashboard
+        router.push("/blockchain")
       } else {
-        setMessage("❌ Face or ID not recognized.")
+        setMessage(data.error || "❌ Face or ID not recognized.")
         setStatus("error")
       }
     } catch {
@@ -179,8 +221,20 @@ export default function FaceLoginPage() {
           </Button>
 
           {message && (
-            <Alert className={`mt-4 ${status === "success" ? "border-green-500" : "border-red-500"}`}>
-              {status === "success" ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+            <Alert
+              className={`mt-4 ${
+                status === "success"
+                  ? "border-green-500"
+                  : status === "error"
+                  ? "border-red-500"
+                  : "border-blue-500"
+              }`}
+            >
+              {status === "success" ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <AlertCircle className="w-4 h-4" />
+              )}
               <AlertDescription>{message}</AlertDescription>
             </Alert>
           )}
@@ -188,7 +242,7 @@ export default function FaceLoginPage() {
 
         {/* Camera Feed */}
         <div className="relative bg-black rounded-xl overflow-hidden">
-          <video ref={videoRef} autoPlay muted className="w-full h-72 object-cover" />
+          <video ref={videoRef} autoPlay muted playsInline className="w-full h-72 object-cover" />
           <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
           <div className="absolute bottom-0 w-full bg-black bg-opacity-60 text-white py-2 text-center text-sm font-medium">
             {stepMessage}
